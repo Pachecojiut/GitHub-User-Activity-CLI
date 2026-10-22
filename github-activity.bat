@@ -1,2 +1,2 @@
 @echo off
-python "D:\Projetinhos\Github Activity CLI\github_activity.py" %*
+python "D:\Projetinhos\Github Activity CLI\github-activity.py" %*
