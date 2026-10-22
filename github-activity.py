@@ -30,22 +30,33 @@ events = json.loads(conteudo.decode('utf-8'))
 if not events:
     sys.exit('Nenhuma atividade recente encontrada.')
 
-#! Agrupando os pushes por repositório.
-pushes = {}     #? Crio um dicionario vazio para guardar os pushes
-
 #! Agrupando eventos repetidos na saida.
 atividades = {}             # * Inves de cada condição la em baixo utilizar um print, a gente guarda a mensagem na variavel (frase) e depois adiciona neste dicionário.
+repositorios = {}
+
 for event in events:
     tipo = event['type']
     repo = event['repo']['name']
 
     #! !!!!!!!!!!
-    url2 = f'https://api.github.com/repos/{repo}'                           
-    req_repo = urllib.request.Request(url2, headers={'User-Agent': 'github-activity_cli'})              #! Todo este bloco é uma requisição de API. Você manda a requisição recebe a informação
-    reposta_repo = urllib.request.urlopen(req_repo)                                                     #! e guarda ela numa variável para uso.
-    conteudo_repo = reposta_repo.read()
-    stars_repo = json.loads(conteudo_repo.decode('utf-8'))
-    star = stars_repo['stargazers_count']
+    if repo not in repositorios:
+        url2 = f'https://api.github.com/repos/{repo}'                           
+        req_repo = urllib.request.Request(url2, headers={'User-Agent': 'github-activity_cli'})  #! Todo este bloco é uma requisição de API. Você manda a requisição recebe a informação e guarda ela numa variável para uso.
+        try:
+            reposta_repo = urllib.request.urlopen(req_repo)    #! Como estou fazendo uma 2° requisição, preciso tratar dos erros assim como na primeira, com try/except.
+            conteudo_repo = reposta_repo.read()
+            stars_repo = json.loads(conteudo_repo.decode('utf-8'))
+            repositorios[repo] = stars_repo['stargazers_count']
+
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                sys.exit('Erro: limite de requisições da API atingido.')
+            repositorios[repo] = None
+
+        except urllib.error.URLError:
+            repositorios[repo] = None 
+
+    star = repositorios[repo]
     #! !!!!!!!!!!!!
 
     if tipo == 'PushEvent':
@@ -64,12 +75,22 @@ for event in events:
 
     else:
         frase = f'- {tipo} in {repo}'
-    atividades[frase] = atividades.get(frase,0) +1
+    atividades[frase] = atividades.get(frase,0) +1 
 
-#? Resolve a questão do singular e plural. 
-
-for frase, total in atividades.items():         # * Agora percorro o dicionario e printo ele.
+# * Agora percorro o dicionario e printo ele.
+for frase, total in atividades.items():  
     print(f'{frase} (x{total})')
+print('\nEstrelas dos repositorios:')
+
+
+# * Resolvendo o problema das stars
+for repo, star in repositorios.items():        
+    if star is not None:
+        print(f'- {repo}: {star} estrelas')
+    else:
+        print(f'- {repo}: não foi possivel obter as estrelas')
+
+
 
 
 
