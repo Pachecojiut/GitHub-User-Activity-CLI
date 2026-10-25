@@ -1,10 +1,24 @@
 import sys
 import urllib.request, urllib.error
 import json
+import os
 
+token=os.environ.get('GITHUB_TOKEN')
 
-def buscar(url):
-    
+headers = {'User-Agent': 'github-activity_cli'}
+if token:
+    headers['Authorization'] = f'Bearer {token}'
+
+def buscar(url): #* Função para pegar os commits do usuário.
+    req_commits = urllib.request.Request(url, headers=headers)
+    try:
+        respota_commits = urllib.request.urlopen(req_commits, timeout=10)
+        conteudo_commits = respota_commits.read()
+        dados_commits = json.loads(conteudo_commits.decode('utf-8'))
+        return dados_commits
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
 if len(sys.argv) != 2:
     sys.exit('Uso: github-activity <username>')
 
@@ -13,11 +27,11 @@ username = sys.argv[1]
 url = f'https://api.github.com/users/{username}/events'
 
 
-req = urllib.request.Request(url, headers={'User-Agent': 'github-activity_cli'})    #? Monta o pedido da API
+req = urllib.request.Request(url, headers=headers)    #? Monta o pedido da API
 
 
 try:                #! Tratando a parte do codigo que pode dar erro com try/except.
-    resposta = urllib.request.urlopen(req)   #? Envia o pedido e recebe a resposta  
+    resposta = urllib.request.urlopen(req, timeout=10)   #? Envia o pedido e recebe a resposta  
 except urllib.error.HTTPError as e:
     if e.code == 404:           #! Cada condição trata um erro
         sys.exit('Erro: usuário não encontrado')
@@ -34,6 +48,7 @@ if not events:
     sys.exit('Nenhuma atividade recente encontrada.')
 
 #! Agrupando eventos repetidos na saida.
+commits = {}
 atividades = {}         # * Inves de cada condição la em baixo utilizar um print, a gente guarda a mensagem na variavel (frase) e depois adiciona neste dicionário.
 repositorios = {}       #* Guarda as estrelas por repositorios
 
@@ -43,26 +58,34 @@ for event in events:
 
     if repo not in repositorios:
         url2 = f'https://api.github.com/repos/{repo}'                           
-        req_repo = urllib.request.Request(url2, headers={'User-Agent': 'github-activity_cli'})  
+        req_repo = urllib.request.Request(url2, headers=headers)  
         try:
-            reposta_repo = urllib.request.urlopen(req_repo)   
+            reposta_repo = urllib.request.urlopen(req_repo, timeout=10)   
             conteudo_repo = reposta_repo.read()
             stars_repo = json.loads(conteudo_repo.decode('utf-8'))
             repositorios[repo] = stars_repo['stargazers_count']
 
         except urllib.error.HTTPError as e:
             if e.code == 403:
-                sys.exit('Erro: limite de requisições da API atingido.')
-            repositorios[repo] = None
+                repositorios[repo] = None
 
         except urllib.error.URLError:
             repositorios[repo] = None 
-    star = repositorios[repo]
 
     if tipo == 'PushEvent':
-        commit = event['payload']['before']['head']
+        before = event['payload']['before']
+        head = event['payload']['head']
+        dados_push = None                       # começa vazio, evita NameError
+
+        if before != '0' * 40:                  # pula o primeiro push da branch
+            url3 = f'https://api.github.com/repos/{repo}/compare/{before}...{head}'
+            dados_push = buscar(url3)
+
         frase = f'- Pushed to {repo}'
 
+        if dados_push:                          # só soma se a função não devolveu None
+            commits[frase] = commits.get(frase, 0) + dados_push['total_commits']
+        
     elif tipo == 'WatchEvent':
         frase = f'- Starred {repo}'
 
@@ -85,9 +108,17 @@ for event in events:
         frase = f'- {tipo} in {repo}'
     atividades[frase] = atividades.get(frase,0) +1 
 
-# * Agora percorro o dicionario e printo ele.           
-textos = [frase.removeprefix('- ') for frase in atividades]             
-largura = max(len(t) for t in textos)
+# * Agora percorro o dicionario e printo ele.
+linhas = []
+for frase, total in atividades.items():
+    texto = frase.removeprefix('- ')
+    if frase in commits:
+        n = commits[frase]
+        nome = 'commit' if n == 1 else 'commits'
+        texto = texto.replace('Pushed to', f'Pushed {n} {nome} to', 1)
+    linhas.append((texto, total))
+
+largura = max(len(t) for t, _ in linhas)
 largura_repo = max(len(r) for r in repositorios)
 tamanho_linha = max(largura + 10, largura_repo + 20)
 
@@ -96,8 +127,7 @@ print('=' * tamanho_linha)
 
 print('\nRecent activity')
 print('-' * tamanho_linha)
-for frase, total in atividades.items():
-    texto = frase.removeprefix('- ')
+for texto, total in linhas:
     vezes = f'x{total}' if total > 1 else ''
     print(f'  - {texto:<{largura}}  {vezes:>4}')
 
