@@ -6,8 +6,9 @@ CLI em Python que mostra no terminal a atividade de um usuário no GitHub, usand
 
 - Busca eventos recentes do usuário do GitHub digitado.
 - Agrupa eventos repetidos.
-- Mostra as estrelas de cada repositorio mencionado.
-- Trata erros comuns (usuário inexistente, limite da API, falta de conexão)
+- Mostra as estrelas de cada repositório mencionado.
+- Mostra quantidade de commits e pushes em um repositório.
+- Trata erros comuns. (usuário inexistente, limite da API, falta de conexão)
 
 ## Instalação
 
@@ -23,11 +24,30 @@ CLI em Python que mostra no terminal a atividade de um usuário no GitHub, usand
 github-activity <username>
 ```
 
+
+# GITUHB_TOKEN (opcional)
+
+É possivel configurar um GITHUB_TOKEN para aumentar o limite de requisições da API do GitHub.
+
+**Sem token o limite de requisições por hora é de 60;
+com `GITHUB_TOKEN` são 5.000 requisições por hora.**
+
+### Como configurar
+
+Crie um token no GitHub e configure-o como variável de ambiente chamada `GITHUB_TOKEN`.
+
+No Windows PowerShell:
+
+```powershell
+$env:GITHUB_TOKEN="seu_token_aqui"
+```
+
 ## Limitações
 
 - Sem token, a API permite 60 requisições por hora, e cada repositório diferente
-  gasta uma delas na busca de estrelas.
-- A API de eventos não informa o número de commits de cada push, então o programa
-  conta pushes, não commits.
+gasta uma delas na busca de estrelas.
 - Mostra só os eventos recentes que a API devolve (até 30).
+
+
+
 
